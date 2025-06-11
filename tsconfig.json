@@ -13,7 +13,7 @@
     "sourceMap": true,
     "resolveJsonModule": true,
     "lib": ["ES2020"],
-    "types": ["node", "jest"]
+    "types": ["node"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "build", "tests"]

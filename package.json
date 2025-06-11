@@ -1,17 +1,13 @@
 {
-  "name": "flux-mcp-server",
-  "version": "1.0.0",
-  "description": "Model Context Protocol server for Flux image generation API",
+  "name": "mcp-server-flux",
+  "version": "0.1.0",
+  "description": "Flux MCP Server - Model Context Protocol server for Flux image generation API",
   "main": "build/index.js",
   "type": "module",
   "scripts": {
     "build": "tsc && chmod +x build/index.js",
-    "test": "jest",
-    "lint": "eslint src/**/*.ts",
-    "format": "prettier --write \"src/**/*.ts\"",
     "start": "node build/index.js",
-    "dev": "ts-node-esm src/index.ts",
-    "prepare": "husky install"
+    "dev": "ts-node-esm src/index.ts"
   },
   "keywords": [
     "mcp",
@@ -22,27 +18,19 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^0.1.0",
-    "dotenv": "^16.0.3"
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.0",
-    "@types/node": "^18.15.11",
-    "@typescript-eslint/eslint-plugin": "^5.57.1",
-    "@typescript-eslint/parser": "^5.57.1",
-    "eslint": "^8.37.0",
-    "husky": "^8.0.3",
-    "jest": "^29.5.0",
-    "lint-staged": "^13.2.0",
-    "prettier": "^2.8.7",
-    "ts-jest": "^29.1.0",
-    "ts-node": "^10.9.1",
-    "typescript": "^5.0.3"
-  },
-  "lint-staged": {
-    "*.ts": [
-      "eslint --fix",
-      "prettier --write"
-    ]
+    "@eslint/js": "^9.28.0",
+    "@types/node": "^20.11.24",
+    "@typescript-eslint/eslint-plugin": "^8.34.0",
+    "@typescript-eslint/parser": "^8.34.0",
+    "eslint": "^9.28.0",
+    "globals": "^16.2.0",
+    "prettier": "^3.2.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3",
+    "typescript-eslint": "^8.34.0"
   }
 }

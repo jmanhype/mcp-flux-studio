@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/jmanhype-mcp-flux-studio-badge.png)](https://mseep.ai/app/jmanhype-mcp-flux-studio)
+
 # MCP Flux Studio
 
 [![smithery badge](https://smithery.ai/badge/@jmanhype/mcp-flux-studio)](https://smithery.ai/server/@jmanhype/mcp-flux-studio)

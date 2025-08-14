@@ -4,6 +4,10 @@
 
 A powerful Model Context Protocol (MCP) server that brings Flux's advanced image generation capabilities to your AI coding assistants. This server enables direct integration of Flux's image generation, manipulation, and control features into Cursor and Windsurf (Codeium) IDEs.
 
+<a href="https://glama.ai/mcp/servers/@jmanhype/mcp-flux-studio">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@jmanhype/mcp-flux-studio/badge" alt="Flux Studio MCP server" />
+</a>
+
 ## Overview
 
 MCP Flux Studio bridges the gap between AI coding assistants and Flux's powerful image generation API, allowing seamless integration of image generation capabilities directly into your development workflow.

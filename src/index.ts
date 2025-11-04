@@ -3,9 +3,20 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ErrorCode, ListToolsRequestSchema, McpError, } from '@modelcontextprotocol/sdk/types.js';
 import { spawn } from 'child_process';
+import type {
+  GenerateArgs,
+  Img2ImgArgs,
+  InpaintArgs,
+  ControlArgs,
+  FluxServerConfig,
+  ToolResponse
+} from './types.js';
 
 class FluxServer {
-    constructor() {
+    private server: Server;
+    private fluxPath: string;
+
+    constructor(config?: FluxServerConfig) {
         this.server = new Server({
             name: 'flux-server',
             version: '0.1.0',
@@ -15,7 +26,13 @@ class FluxServer {
             },
         });
         // Path to Flux installation
-        this.fluxPath = process.env.FLUX_PATH || '/Users/speed/CascadeProjects/flux';
+        this.fluxPath = config?.fluxPath || process.env.FLUX_PATH || '/Users/speed/CascadeProjects/flux';
+
+        // Validate configuration
+        if (!process.env.BFL_API_KEY) {
+            console.error('[Warning] BFL_API_KEY environment variable not set');
+        }
+
         this.setupToolHandlers();
         // Error handling
         this.server.onerror = (error) => console.error('[MCP Error]', error);
@@ -25,10 +42,16 @@ class FluxServer {
         });
     }
 
-    async runPythonCommand(args) {
+    private async runPythonCommand(args: string[]): Promise<string> {
         return new Promise((resolve, reject) => {
+            // Validate arguments
+            if (!args || args.length === 0) {
+                reject(new Error('No command arguments provided'));
+                return;
+            }
+
             // Use python from virtual environment if available
-            const pythonPath = process.env.VIRTUAL_ENV ? 
+            const pythonPath = process.env.VIRTUAL_ENV ?
                 `${process.env.VIRTUAL_ENV}/bin/python` : 'python3';
 
             const childProcess = spawn(pythonPath, ['fluxcli.py', ...args], {
@@ -47,14 +70,59 @@ class FluxServer {
                 errorOutput += data.toString();
             });
 
+            childProcess.on('error', (error) => {
+                reject(new Error(`Failed to spawn Python process: ${error.message}`));
+            });
+
             childProcess.on('close', (code) => {
                 if (code === 0) {
                     resolve(output);
                 } else {
-                    reject(new Error(`Flux command failed: ${errorOutput}`));
+                    reject(new Error(`Flux command failed (exit code ${code}): ${errorOutput}`));
                 }
             });
         });
+    }
+
+    /**
+     * Validates that a required string parameter is provided
+     */
+    private validateRequiredString(value: unknown, fieldName: string): string {
+        if (typeof value !== 'string' || value.trim() === '') {
+            throw new McpError(
+                ErrorCode.InvalidParams,
+                `${fieldName} is required and must be a non-empty string`
+            );
+        }
+        return value;
+    }
+
+    /**
+     * Validates numeric parameters within acceptable ranges
+     */
+    private validateNumber(value: unknown, fieldName: string, min?: number, max?: number): number | undefined {
+        if (value === undefined || value === null) {
+            return undefined;
+        }
+        if (typeof value !== 'number' || isNaN(value)) {
+            throw new McpError(
+                ErrorCode.InvalidParams,
+                `${fieldName} must be a valid number`
+            );
+        }
+        if (min !== undefined && value < min) {
+            throw new McpError(
+                ErrorCode.InvalidParams,
+                `${fieldName} must be at least ${min}`
+            );
+        }
+        if (max !== undefined && value > max) {
+            throw new McpError(
+                ErrorCode.InvalidParams,
+                `${fieldName} must be at most ${max}`
+            );
+        }
+        return value;
     }
 
     setupToolHandlers() {
@@ -218,61 +286,95 @@ class FluxServer {
             ],
         }));
 
-        this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+        this.server.setRequestHandler(CallToolRequestSchema, async (request): Promise<ToolResponse> => {
             try {
                 switch (request.params.name) {
                     case 'generate': {
-                        const args = request.params.arguments;
+                        const args = request.params.arguments as GenerateArgs;
+                        // Validate required fields
+                        const prompt = this.validateRequiredString(args.prompt, 'prompt');
+
+                        // Validate optional numeric fields
+                        const width = this.validateNumber(args.width, 'width', 256, 2048);
+                        const height = this.validateNumber(args.height, 'height', 256, 2048);
+
                         const cmdArgs = ['generate'];
-                        cmdArgs.push('--prompt', args.prompt);
+                        cmdArgs.push('--prompt', prompt);
                         if (args.model) cmdArgs.push('--model', args.model);
                         if (args.aspect_ratio) cmdArgs.push('--aspect-ratio', args.aspect_ratio);
-                        if (args.width) cmdArgs.push('--width', args.width.toString());
-                        if (args.height) cmdArgs.push('--height', args.height.toString());
+                        if (width) cmdArgs.push('--width', width.toString());
+                        if (height) cmdArgs.push('--height', height.toString());
                         if (args.output) cmdArgs.push('--output', args.output);
+
                         const output = await this.runPythonCommand(cmdArgs);
                         return {
                             content: [{ type: 'text', text: output }],
                         };
                     }
                     case 'img2img': {
-                        const args = request.params.arguments;
+                        const args = request.params.arguments as Img2ImgArgs;
+                        // Validate required fields
+                        const image = this.validateRequiredString(args.image, 'image');
+                        const prompt = this.validateRequiredString(args.prompt, 'prompt');
+                        const name = this.validateRequiredString(args.name, 'name');
+
+                        // Validate optional numeric fields
+                        const strength = this.validateNumber(args.strength, 'strength', 0, 1);
+                        const width = this.validateNumber(args.width, 'width', 256, 2048);
+                        const height = this.validateNumber(args.height, 'height', 256, 2048);
+
                         const cmdArgs = ['img2img'];
-                        cmdArgs.push('--image', args.image);
-                        cmdArgs.push('--prompt', args.prompt);
-                        cmdArgs.push('--name', args.name);
+                        cmdArgs.push('--image', image);
+                        cmdArgs.push('--prompt', prompt);
+                        cmdArgs.push('--name', name);
                         if (args.model) cmdArgs.push('--model', args.model);
-                        if (args.strength) cmdArgs.push('--strength', args.strength.toString());
-                        if (args.width) cmdArgs.push('--width', args.width.toString());
-                        if (args.height) cmdArgs.push('--height', args.height.toString());
+                        if (strength !== undefined) cmdArgs.push('--strength', strength.toString());
+                        if (width) cmdArgs.push('--width', width.toString());
+                        if (height) cmdArgs.push('--height', height.toString());
                         if (args.output) cmdArgs.push('--output', args.output);
+
                         const output = await this.runPythonCommand(cmdArgs);
                         return {
                             content: [{ type: 'text', text: output }],
                         };
                     }
                     case 'inpaint': {
-                        const args = request.params.arguments;
+                        const args = request.params.arguments as InpaintArgs;
+                        // Validate required fields
+                        const image = this.validateRequiredString(args.image, 'image');
+                        const prompt = this.validateRequiredString(args.prompt, 'prompt');
+
                         const cmdArgs = ['inpaint'];
-                        cmdArgs.push('--image', args.image);
-                        cmdArgs.push('--prompt', args.prompt);
+                        cmdArgs.push('--image', image);
+                        cmdArgs.push('--prompt', prompt);
                         if (args.mask_shape) cmdArgs.push('--mask-shape', args.mask_shape);
                         if (args.position) cmdArgs.push('--position', args.position);
                         if (args.output) cmdArgs.push('--output', args.output);
+
                         const output = await this.runPythonCommand(cmdArgs);
                         return {
                             content: [{ type: 'text', text: output }],
                         };
                     }
                     case 'control': {
-                        const args = request.params.arguments;
+                        const args = request.params.arguments as ControlArgs;
+                        // Validate required fields
+                        const type = this.validateRequiredString(args.type, 'type') as ControlType;
+                        const image = this.validateRequiredString(args.image, 'image');
+                        const prompt = this.validateRequiredString(args.prompt, 'prompt');
+
+                        // Validate optional numeric fields
+                        const steps = this.validateNumber(args.steps, 'steps', 1, 100);
+                        const guidance = this.validateNumber(args.guidance, 'guidance', 0, 100);
+
                         const cmdArgs = ['control'];
-                        cmdArgs.push('--type', args.type);
-                        cmdArgs.push('--image', args.image);
-                        cmdArgs.push('--prompt', args.prompt);
-                        if (args.steps) cmdArgs.push('--steps', args.steps.toString());
-                        if (args.guidance) cmdArgs.push('--guidance', args.guidance.toString());
+                        cmdArgs.push('--type', type);
+                        cmdArgs.push('--image', image);
+                        cmdArgs.push('--prompt', prompt);
+                        if (steps) cmdArgs.push('--steps', steps.toString());
+                        if (guidance !== undefined) cmdArgs.push('--guidance', guidance.toString());
                         if (args.output) cmdArgs.push('--output', args.output);
+
                         const output = await this.runPythonCommand(cmdArgs);
                         return {
                             content: [{ type: 'text', text: output }],
@@ -282,6 +384,14 @@ class FluxServer {
                         throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${request.params.name}`);
                 }
             } catch (error) {
+                // Handle McpError differently - rethrow to let SDK handle it
+                if (error instanceof McpError) {
+                    throw error;
+                }
+
+                // Log detailed error for debugging
+                console.error('[Tool Execution Error]', error);
+
                 return {
                     content: [
                         {

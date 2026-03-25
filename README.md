@@ -1,202 +1,99 @@
-# MCP Flux Studio
+# mcp-flux-studio
 
 [![smithery badge](https://smithery.ai/badge/@jmanhype/mcp-flux-studio)](https://smithery.ai/server/@jmanhype/mcp-flux-studio)
 
-A powerful Model Context Protocol (MCP) server that brings Flux's advanced image generation capabilities to your AI coding assistants. This server enables direct integration of Flux's image generation, manipulation, and control features into Cursor and Windsurf (Codeium) IDEs.
+MCP server that wraps the Flux image generation API. Exposes text-to-image, image-to-image, inpainting, and structural control (canny/depth/pose) as MCP tools over stdio. The server itself is TypeScript; it shells out to a Python CLI (`fluxcli.py`) for actual API calls.
 
-## Overview
+## What It Does
 
-MCP Flux Studio bridges the gap between AI coding assistants and Flux's powerful image generation API, allowing seamless integration of image generation capabilities directly into your development workflow.
+Receives MCP tool calls, builds command-line arguments, spawns `python3 fluxcli.py <subcommand> ...` against a local Flux installation, and returns the output. Requires a `BFL_API_KEY` for the Flux API and a local copy of the Flux CLI.
 
-### Features
+## Status
 
-- **Image Generation**
-  - Text-to-image generation with precise control
-  - Multiple model support (flux.1.1-pro, flux.1-pro, flux.1-dev, flux.1.1-ultra)
-  - Customizable aspect ratios and dimensions
+| Area | State |
+|------|-------|
+| MCP transport | stdio |
+| Language | TypeScript (server) + Python (CLI wrapper) |
+| Flux models | flux.1.1-pro, flux.1-pro, flux.1-dev, flux.1.1-ultra |
+| Tests | Jest, 2 test files |
+| IDE tested | Cursor v0.45.7+, Windsurf/Codeium Wave 3+ |
+| npm package | `flux-mcp-server` v1.0.0 |
+| License | MIT |
 
-- **Image Manipulation**
-  - Image-to-image transformation
-  - Inpainting with customizable masks
-  - Resolution upscaling and enhancement
+## MCP Tools
 
-- **Advanced Controls**
-  - Edge-based generation (canny)
-  - Depth-aware generation
-  - Pose-guided generation
+| Tool | Required Params | Optional Params | Output |
+|------|----------------|-----------------|--------|
+| `generate` | `prompt` | `model`, `aspect_ratio`, `width`, `height`, `output` | Generated image path |
+| `img2img` | `image`, `prompt`, `name` | `model`, `strength` (0-1), `width`, `height`, `output` | Transformed image path |
+| `inpaint` | `image`, `prompt` | `mask_shape` (circle/rectangle), `position` (center/ground), `output` | Inpainted image path |
+| `control` | `type` (canny/depth/pose), `image`, `prompt` | `steps` (1-100), `guidance`, `output` | Controlled image path |
 
-- **IDE Integration**
-  - Full support for Cursor (v0.45.7+)
-  - Compatible with Windsurf/Codeium Cascade (Wave 3+)
-  - Seamless tool invocation through AI assistants
+Width and height are validated to 256-2048 range.
 
-## Quick Start
+## Setup
 
-1. **Prerequisites**
-   - Node.js 18+
-   - Python 3.12+
-   - Flux API key
-   - Compatible IDE (Cursor or Windsurf)
-
-2. **Installation**
-
-### Installing via Smithery
-
-To install Flux Studio for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@jmanhype/mcp-flux-studio):
+### Via Smithery
 
 ```bash
 npx -y @smithery/cli install @jmanhype/mcp-flux-studio --client claude
 ```
 
-### Manual Installation
-   ```bash
-   git clone https://github.com/jmanhype/mcp-flux-studio.git
-   cd mcp-flux-studio
-   npm install
-   npm run build
-   ```
-
-3. **Basic Configuration**
-   ```env
-   BFL_API_KEY=your_flux_api_key
-   FLUX_PATH=/path/to/flux/installation
-   ```
-
-For detailed setup instructions, including IDE-specific configuration and troubleshooting, see our [Installation Guide](docs/INSTALLATION.md).
-
-## Documentation
-
-- [Installation Guide](docs/INSTALLATION.md) - Comprehensive setup instructions
-- [API Documentation](docs/API.md) - Detailed tool documentation
-- [Example Usage](examples/tool-examples.md) - Real-world usage examples
-- [Contributing Guidelines](docs/CONTRIBUTING.md) - How to contribute
-
-## IDE Integration
-
-### Cursor (v0.45.7+)
-
-MCP Flux Studio integrates seamlessly with Cursor's AI assistant:
-
-1. **Configuration**
-   - Configure via Settings > Features > MCP
-   - Supports both stdio and SSE connections
-   - Environment variables can be set via wrapper scripts
-
-2. **Usage**
-   - Tools automatically available to Cursor's AI assistant
-   - Tool invocations require user approval
-   - Real-time feedback on generation progress
-
-### Windsurf/Codeium (Wave 3+)
-
-Integration with Windsurf's Cascade AI:
-
-1. **Configuration**
-   - Edit `~/.codeium/windsurf/mcp_config.json`
-   - Supports process-based tool execution
-   - Environment variables configured in JSON
-
-2. **Usage**
-   - Access tools through Cascade's MCP toolbar
-   - Automatic tool discovery and loading
-   - Integrated with Cascade's AI capabilities
-
-For detailed IDE-specific setup instructions, see the [Installation Guide](docs/INSTALLATION.md).
-
-## Usage
-
-The server provides the following tools:
-
-### generate
-Generate an image from a text prompt.
-```json
-{
-  "prompt": "A photorealistic cat",
-  "model": "flux.1.1-pro",
-  "aspect_ratio": "1:1",
-  "output": "generated.jpg"
-}
-```
-
-### img2img
-Generate an image using another image as reference.
-```json
-{
-  "image": "input.jpg",
-  "prompt": "Convert to oil painting",
-  "model": "flux.1.1-pro",
-  "strength": 0.85,
-  "output": "output.jpg",
-  "name": "oil_painting"
-}
-```
-
-### inpaint
-Inpaint an image using a mask.
-```json
-{
-  "image": "input.jpg",
-  "prompt": "Add flowers",
-  "mask_shape": "circle",
-  "position": "center",
-  "output": "inpainted.jpg"
-}
-```
-
-### control
-Generate an image using structural control.
-```json
-{
-  "type": "canny",
-  "image": "control.jpg",
-  "prompt": "A realistic photo",
-  "output": "controlled.jpg"
-}
-```
-
-## Development
-
-### Project Structure
-
-```
-flux-mcp-server/
-├── src/
-│   ├── index.ts          # Main server implementation
-│   └── types.ts          # TypeScript type definitions
-├── tests/
-│   └── server.test.ts    # Server tests
-├── docs/
-│   ├── API.md           # API documentation
-│   └── CONTRIBUTING.md  # Contribution guidelines
-├── examples/
-│   ├── generate.json    # Example tool usage
-│   └── config.json      # Example configuration
-├── package.json
-├── tsconfig.json
-└── README.md
-```
-
-### Running Tests
+### Manual
 
 ```bash
-npm test
-```
-
-### Building
-
-```bash
+git clone https://github.com/jmanhype/mcp-flux-studio.git
+cd mcp-flux-studio
+npm install
 npm run build
+npm start
 ```
 
-## Contributing
+### Environment Variables
 
-Please read [CONTRIBUTING.md](docs/CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `BFL_API_KEY` | Yes | Flux API key |
+| `FLUX_PATH` | No | Path to Flux CLI installation (default: `/Users/speed/CascadeProjects/flux`) |
+| `VIRTUAL_ENV` | No | If set, uses `$VIRTUAL_ENV/bin/python` instead of `python3` |
+
+### IDE Configuration
+
+**Cursor**: Settings > Features > MCP. Supports stdio and SSE.
+
+**Windsurf/Codeium**: Edit `~/.codeium/windsurf/mcp_config.json`.
+
+## Architecture
+
+```
+src/
+  index.ts   — MCP server, tool handlers, Python process spawning
+  types.ts   — TypeScript interfaces for tool arguments
+  cli/
+    fluxcli.py — Python CLI that calls the Flux API (not in this repo's src)
+tests/
+  server.test.ts
+  types.test.ts
+```
+
+## Limitations
+
+- Shells out to Python for every tool call; each call spawns a new process
+- The default `FLUX_PATH` is hardcoded to a local directory
+- No connection pooling or request queuing for the Flux API
+- No image previews returned in MCP responses — only file paths
+- The `ControlType` type is referenced but not imported in `index.ts`
+- No progress reporting during generation
+
+## Dependencies
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `@modelcontextprotocol/sdk` | ^0.1.0 | MCP server protocol |
+| `dotenv` | ^16.0.3 | Environment variable loading |
+| `typescript` | ^5.0.3 | Build toolchain |
+| `jest` | ^29.5.0 | Test runner |
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- [Model Context Protocol](https://github.com/modelcontextprotocol/mcp) - The protocol specification
-- [Flux API](https://flux.ai) - The underlying image generation API
+MIT
